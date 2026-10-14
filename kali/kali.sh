@@ -15,6 +15,7 @@ IMAGE="${KALI_IMAGE:-kalilinux/kali-rolling}"
 NAME="${KALI_CONTAINER:-kali}"
 CA_BUNDLE="${KALI_CA_BUNDLE:-${SSL_CERT_FILE:-/root/.ccr/ca-bundle.crt}}"
 PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+MIRROR="${KALI_MIRROR:-https://kali.download/kali}"
 
 log() { printf '\033[1;34m[kali]\033[0m %s\n' "$*" >&2; }
 
@@ -30,8 +31,10 @@ exists()  { docker container inspect "$NAME" >/dev/null 2>&1; }
 running() { [ "$(docker container inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" = true ]; }
 
 configure_apt() {
-  # Kali's default sources use http://; the proxy only tunnels HTTPS.
-  docker exec "$NAME" sed -i 's#http://http.kali.org#https://http.kali.org#g' /etc/apt/sources.list.d/kali.sources
+  # Kali's default sources use http://; the proxy only tunnels HTTPS. Use the kali.download
+  # CDN directly: http.kali.org redirects package fetches to third-party mirrors, which an
+  # egress allowlist blocks. Override with KALI_MIRROR.
+  docker exec "$NAME" sed -i -E "s#https?://http\.kali\.org/kali/?#$MIRROR/#g" /etc/apt/sources.list.d/kali.sources
   local conf=""
   [ -n "$PROXY" ] && conf+="Acquire::https::Proxy \"$PROXY\";\n"
   [ -f "$CA_BUNDLE" ] && conf+="Acquire::https::CAInfo \"/etc/ssl/certs/host-ca-bundle.crt\";\n"
@@ -58,6 +61,7 @@ up() {
 
 install() {
   up >/dev/null
+  configure_apt
   local pkg="${1:-kali-linux-headless}"
   log "apt-get update"
   # Capture first: piping into `grep -q` SIGPIPEs tee and fails the pipeline under pipefail.
@@ -65,8 +69,8 @@ install() {
   out="$(docker exec "$NAME" apt-get update -o Acquire::Retries=2 2>&1 || true)"
   printf '%s\n' "$out" >&2
   if ! grep -q '^Hit\|^Get' <<<"$out"; then
-    log "cannot reach the Kali mirror (http.kali.org). If you are behind an egress allowlist,"
-    log "allow http.kali.org and kali.download, then re-run: $0 install $pkg"
+    log "cannot reach the Kali mirror ($MIRROR). If you are behind an egress allowlist,"
+    log "allow kali.download, then re-run: $0 install $pkg"
     exit 1
   fi
   log "installing $pkg"

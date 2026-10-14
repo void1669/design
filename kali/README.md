@@ -17,13 +17,14 @@ named `kali` (host networking, `NET_ADMIN`/`NET_RAW` for scanners, `/root` kept 
 
 The script detects `HTTPS_PROXY` and the CA bundle (`SSL_CERT_FILE`, or
 `/root/.ccr/ca-bundle.crt`), mounts the bundle into the container, switches apt to
-`https://http.kali.org`, and points apt at the proxy.
+the `https://kali.download/kali` CDN (override with `KALI_MIRROR`), and points apt at the proxy.
 
 `apt` can only reach Kali's repositories if the environment's network policy allows
 them. Add these under **Allowed domains** (environment settings → Network access):
 
-- `http.kali.org`
-- `kali.download` (the CDN that `http.kali.org` redirects to)
+- `kali.download` (Kali's CDN; apt is pointed at it directly)
+- `http.kali.org` (optional; only if you switch back to the redirector, which also
+  sends downloads to third-party mirrors that would each need allowing)
 
 Docker Hub (`registry-1.docker.io`, `auth.docker.io`, `production.cloudflare.docker.com`)
 must also be reachable to pull the image. It is under the default policy.
