@@ -60,7 +60,11 @@ install() {
   up >/dev/null
   local pkg="${1:-kali-linux-headless}"
   log "apt-get update"
-  if ! docker exec "$NAME" apt-get update -o Acquire::Retries=2 2>&1 | tee /dev/stderr | grep -q '^Hit\|^Get'; then
+  # Capture first: piping into `grep -q` SIGPIPEs tee and fails the pipeline under pipefail.
+  local out
+  out="$(docker exec "$NAME" apt-get update -o Acquire::Retries=2 2>&1 || true)"
+  printf '%s\n' "$out" >&2
+  if ! grep -q '^Hit\|^Get' <<<"$out"; then
     log "cannot reach the Kali mirror (http.kali.org). If you are behind an egress allowlist,"
     log "allow http.kali.org and kali.download, then re-run: $0 install $pkg"
     exit 1
